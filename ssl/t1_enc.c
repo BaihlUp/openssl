@@ -572,22 +572,6 @@ int tls1_change_cipher_state(SSL *s, int which)
     }
 #endif                          /* KSSL_DEBUG */
 
-#ifndef MODIFY_BY_BAIHL_FLAG
-    {
-        int i;
-        printf("EVP_CipherInit_ex(dd,c,key=,iv=,which)\n");
-        printf("\tkey= ");
-        for (i = 0; i < c->key_len; i++)
-            printf("%02x", key[i]);
-        printf("\n");
-        printf("\t iv= ");
-        for (i = 0; i < c->iv_len; i++)
-            printf("%02x", iv[i]);
-        printf("\n");
-    }
-#endif  
-
-
     if (EVP_CIPHER_mode(c) == EVP_CIPH_GCM_MODE) {
         if (!EVP_CipherInit_ex(dd, c, NULL, key, NULL, (which & SSL3_CC_WRITE))
             || !EVP_CIPHER_CTX_ctrl(dd, EVP_CTRL_GCM_SET_IV_FIXED, k, iv)) {
@@ -870,10 +854,12 @@ int tls1_enc(SSL *s, int send)
                                       EVP_AEAD_TLS1_AAD_LEN, buf);
             if (pad <= 0)
                 return -1;
+            #ifdef MODIFY_BY_BAIHL_FLAG
             if (send) {
                 l += pad;
                 rec->length += pad;
             }
+            #endif
         } else if ((bs != 1) && send) {
             i = bs - ((int)l % bs);
 #ifdef MODIFY_BY_BAIHL_FLAG
@@ -912,26 +898,6 @@ int tls1_enc(SSL *s, int send)
         }
 #endif                          /* KSSL_DEBUG */
 
-#ifndef MODIFY_BY_BAIHL_FLAG
-        {
-            unsigned long ui;
-            printf("EVP_Cipher(ds=%p,rec->data=%p,rec->input=%p,l=%ld) ==>\n",
-                    ds, rec->data, rec->input, l);
-            printf("\tEVP_CIPHER_CTX: %d buf_len, %d key_len [%lu %lu], %d iv_len\n",
-                    ds->buf_len, ds->cipher->key_len, DES_KEY_SZ,
-                    DES_SCHEDULE_SZ, ds->cipher->iv_len);
-            printf("\t\tIV: ");
-            for (i = 0; i < ds->cipher->iv_len; i++)
-                printf("%02X", ds->iv[i]);
-            printf("\n");
-            printf("\trec->input=");
-            for (ui = 0; ui < l; ui++)
-                printf(" %02x", rec->input[ui]);
-            printf("\n");
-        }
-#endif     
-
-
         if (!send) {
             if (l == 0 || l % bs != 0)
                 return 0;
@@ -942,7 +908,13 @@ int tls1_enc(SSL *s, int send)
             ? (i < 0)
             : (i == 0))
             return -1;          /* AEAD can fail to verify MAC */
-        if (EVP_CIPHER_mode(enc) == EVP_CIPH_GCM_MODE && !send) {
+
+#ifdef MODIFY_BY_BAIHL_FLAG
+        if (EVP_CIPHER_mode(enc) == EVP_CIPH_GCM_MODE && !send)
+#else
+        if (EVP_CIPHER_mode(enc) == EVP_CIPH_GCM_MODE)
+#endif  
+        {
             rec->data += EVP_GCM_TLS_EXPLICIT_IV_LEN;
             rec->input += EVP_GCM_TLS_EXPLICIT_IV_LEN;
             rec->length -= EVP_GCM_TLS_EXPLICIT_IV_LEN;
@@ -956,16 +928,6 @@ int tls1_enc(SSL *s, int send)
             fprintf(stderr, "\n");
         }
 #endif                          /* KSSL_DEBUG */
-
-#ifndef MODIFY_BY_BAIHL_FLAG
-        {
-            unsigned long i;
-            printf("\trec->data=");
-            for (i = 0; i < l; i++)
-                printf(" %02x", rec->data[i]);
-            printf("\n");
-        }
-#endif    
 
         ret = 1;
         if (EVP_MD_CTX_md(s->read_hash) != NULL)

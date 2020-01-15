@@ -585,7 +585,9 @@ static int ssl3_get_record(SSL *s)
     return (1);
 
  f_err:
+    #ifdef MODIFY_BY_BAIHL_FLAG
     ssl3_send_alert(s, SSL3_AL_FATAL, al);
+    #endif
  err:
     return (ret);
 }
